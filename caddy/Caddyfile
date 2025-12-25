@@ -1,0 +1,143 @@
+# Global options
+{
+    admin off
+    persist_config off
+    auto_https off
+    log {
+        format json
+    }
+    servers {
+        trusted_proxies static private_ranges
+    }
+}
+
+# Load balancing settings
+(lb_settings) {
+    lb_policy round_robin
+    lb_retries 100
+    lb_try_duration 10s
+    lb_try_interval 250ms
+}
+
+# Passive health checks settings
+(passive_health_checks) {
+    fail_duration 60s
+    max_fails 300
+    unhealthy_latency 5s
+    unhealthy_request_count 200
+}
+
+# Seafile Block
+:{$PORT} {
+    log {
+        format json
+    }
+
+    @ws {
+  		header Connection *Upgrade*
+  		header Upgrade websocket
+  	}
+
+
+   handle_path /seafile/notification* {
+     rewrite * {uri}
+     reverse_proxy http://{$SEAFILE_DOMAIN}:8083
+   }
+
+   handle /seafile* {
+     reverse_proxy http://{$SEAFILE_DOMAIN}:8000
+   }
+
+   handle_path /seafhttp* {
+     reverse_proxy http://{$SEAFILE_DOMAIN}:8082
+   }
+
+   handle_path /seafmedia* {
+     rewrite * /media{uri}
+     root * /srv/seafile/seafile-server-latest/seahub
+     file_server
+   }
+
+   handle_path /seafdav* {
+     reverse_proxy http://{$SEAFILE_DOMAIN}:8080
+   }
+
+    # Seafile WebSocket handling
+    handle_path /socket.io/* {
+      rewrite * /socket.io{uri}
+
+      reverse_proxy @ws {$SEADOC_DOMAIN}:{$SEADOC_PORT}
+    }
+
+
+    # Seadoc WebSocket handling
+    handle_path /sdoc-server/* {
+        rewrite * {uri}
+
+        reverse_proxy {$SEADOC_DOMAIN}:{$SEADOC_PORT}
+    }
+
+    # Reverse proxy to Seafile service (adjust with your actual Seafile domain and port)
+    reverse_proxy {$SEAFILE_DOMAIN}:{$SEAFILE_PORT}
+  #   reverse_proxy {
+  # 		# for private networking replicas are exposed as multiple dns results, use those dns results as the upstreams
+  # 		dynamic a {
+  # 			name {$SEAFILE_DOMAIN}
+  # 			port {$SEAFILE_PORT}
+  # 			refresh 1s
+  # 			dial_timeout 30s
+  # 			versions ipv4 ipv6
+  # 		}
+
+  # 		# configure load balancing settings
+  # 		import lb_settings
+
+  # 		# configure passive health checks
+  # 		import passive_health_checks
+
+  # 		# sets the Host header to the header to the dynamic name and port options
+  # 		header_up Host {upstream_hostport}
+		# }
+
+}
+
+# # Seadoc Block
+# :{SEADOC_DOMAIN} {
+#     log {
+#         format json
+#     }
+
+#     # Reverse proxy to Seadoc service (adjust with your actual Seadoc domain and port)
+#     reverse_proxy {
+#         dynamic a {
+#             name {$SEADOC_DOMAIN}
+#             port {$SEADOC_PORT}
+#             refresh 1s
+#             dial_timeout 30s
+#             versions ipv4 ipv6
+#         }
+
+#         import lb_settings
+#         import passive_health_checks
+
+#         header_up Host {upstream_hostport}
+#     }
+
+#     # Seadoc WebSocket handling
+#     handle_path /sdoc-server/* {
+#         reverse_proxy {
+#             dynamic a {
+#                 name {$SEADOC_DOMAIN}
+#                 port {$SEADOC_PORT}
+#                 refresh 1s
+#                 dial_timeout 30s
+#                 versions ipv4 ipv6
+#             }
+
+#             import lb_settings
+#             import passive_health_checks
+
+#             header_up Host {upstream_hostport}
+#         }
+#     }
+# }
